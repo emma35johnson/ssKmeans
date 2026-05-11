@@ -1,0 +1,14 @@
+
+year <- sub("-.*", "", meta$Date)
+note <- sprintf("R package version %s", meta$Version)
+
+bibentry(bibtype = "Manual",
+  title        = "{ssKmeans}: An {R} Package for semi-supervised clustering with Kmeans algorithm",
+  author       = c(person("Volodymyr Melnykov"), person("Igor Melnykov")),
+  year         = year,
+  note         = note,
+  url          = "http://CRAN.R-project.org/package=ssKmeans")
+
+textVersion  = paste0("Volodymyr Melnykov (", year, ")", "ClickClust: An R Package for Model-Based Clustering of Categorical Sequences.", note, ".")
+
+

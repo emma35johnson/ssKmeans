@@ -1,0 +1,914 @@
+
+#include "array.h"
+#include "ssKmeans.h"
+
+#ifdef __HAVE_R_
+	#include <R.h>
+	#include <Rmath.h>
+#endif
+
+
+
+void initialization_mu(double **x, int n, int p, int K, int B, int *poseq, double **mu){
+
+	double **block_means, *block_prob;
+	int *integers, *sample, *block_size;
+	
+	double rand_num, cum_prob, rem_prob;
+	int b, i, j, k;
+	int largest;
+
+	MAKE_MATRIX(block_means, B, p);
+	MAKE_VECTOR(block_size, B);
+	MAKE_VECTOR(block_prob, B);
+	MAKE_VECTOR(integers, B);
+	MAKE_VECTOR(sample, K);
+
+
+
+	for (b=0; b<B; b++){
+		block_size[b] = 0;
+		for (j=0; j<p; j++){
+			block_means[b][j] = 0.0;
+		}
+	}
+
+	for (i=0; i<n; i++){
+		block_size[poseq[i]-1] = block_size[poseq[i]-1] + 1;
+		for (j=0; j<p; j++){
+			block_means[poseq[i]-1][j] = block_means[poseq[i]-1][j] + x[i][j];
+		}
+	}
+
+	for (b=0; b<B; b++){
+		for (j=0; j<p; j++){
+			block_means[b][j] = block_means[b][j] / block_size[b];
+		}
+	}
+
+	// initializing an array to generate a sample without replacement
+	for (b=0; b<B; b++) {
+		integers[b] = b + 1;
+		block_prob[b] = block_size[b] / (double) n;
+	}
+	
+	// picking the numbers without replacement
+	largest = B;
+
+	for (k=0; k<K; k++) {
+		
+		#ifdef __HAVE_R_
+			rand_num = runif(0.0, 1.0);
+		#else
+			rand_num = rand() / (double) RAND_MAX;
+		#endif	
+		
+		b = 0;
+		cum_prob = block_prob[0];
+		while (rand_num > cum_prob){
+			b++;
+			cum_prob = cum_prob + block_prob[b];
+		}
+
+		sample[k] = b + 1;
+		integers[b] = integers[largest-1];
+		rem_prob = block_prob[b];
+		block_prob[b] = block_prob[largest-1];
+
+		largest = largest - 1;
+		
+		for (b=0; b<largest; b++) {
+			block_prob[b] = block_prob[b] / (1.0 - rem_prob);
+		}
+		
+	}
+ 
+	for (k=0; k<K; k++) {
+		for (j=0; j<p; j++) {
+			mu[k][j] = block_means[sample[k]-1][j];
+		}
+	}
+
+	// for (k=0; k<K; k++) {
+	//   printf("%i ", sample[k]);
+	// }
+	// printf("\n");
+
+	//  for (k=0; k<K; k++) {
+	//    for (j=0; j<p; j++) {
+	//      printf("%lf ", mu[k][j]);
+	//    }
+	//    printf("\n");
+	//  }
+
+	FREE_VECTOR(integers);
+	FREE_VECTOR(sample);
+	FREE_VECTOR(block_prob);
+	FREE_MATRIX(block_means);
+	FREE_VECTOR(block_size);
+
+}
+
+
+void membership(double **x, int K, int n, int p, int B, int negdim, int *poseq, int **negeq, double **mu, double sigma2, int *Z) {
+  
+	int b, i, j;
+	int h, start_h, nodes;
+	int k, k2, k3, k4, k5, k6, k7, k8, k9, k10;
+	double sqdist, sum0, best_sum, min_sum, sum_of_sums;
+//	double sum, jsum, lsum;
+	double **all_sum;
+
+//	double diff[p];
+//	int champion;
+
+
+	MAKE_MATRIX(all_sum, B, K);
+	
+	for (b=0; b<B; b++){
+		for (k=0; k<K; k++){
+			all_sum[b][k] = 0;
+		}
+	}
+
+	for (i=0; i<n; i++){
+		for (k=0; k<K; k++){
+			sqdist = 0.0;
+			for (j=0; j<p; j++) {
+				sqdist = sqdist + pow(x[i][j] - mu[k][j], 2);
+			}			
+			all_sum[poseq[i]-1][k] = all_sum[poseq[i]-1][k] + sqdist;
+		}
+	}
+	
+	//	for (i=0; i<negdim; i++) {
+	//  for (j=0; j<2; j++){
+	//    printf("%i ", negeq[i][j]);
+	// }
+	// printf("\n");
+	//}
+	
+	start_h = 0;
+	
+	for (b=0; b<B; b++){
+
+		Z[b] = 0;
+		best_sum = -INFINITY;
+		
+//		printf("Current value of %i \n", start_h);
+		
+		h = start_h;
+		nodes = 1;		
+		
+		if (h < negdim){
+			
+			while ((negeq[h][0] - 1) == b){
+				nodes++;
+				printf("AAA Block %i Nodes: %i\n", b+1, nodes);
+				h++;
+				if (h == negdim) break;
+			}
+			
+		}
+
+		//		 printf("Block %i Nodes: %i\n", b+1, nodes);
+		
+		min_sum = INFINITY;
+		
+		if (nodes == 1){ // 1-node complete graph
+			min_sum = all_sum[b][0];
+			for (k=1; k<K; k++){
+				if (all_sum[b][k] < min_sum) min_sum = all_sum[b][k];
+			}
+		}
+
+		if (nodes == 2){ // 2-node complete graph
+			for (k=0; k<K; k++){
+				for (k2=0; k2<K; k2++){
+					if (k2 != k){
+						if (all_sum[b][k] + all_sum[negeq[start_h][1] - 1][k2] < min_sum) min_sum = all_sum[b][k] + all_sum[negeq[start_h][1] - 1][k2];
+						//					if (b == 25) printf("k = %i, s = %i, sum of sums = %lf \n", k, k2, all_sum[b][k] + all_sum[negeq[start_h][1] - 1][k2]);
+
+					}
+				}
+			}
+		}				
+
+		if (nodes == 3){ // 3-node complete graph
+		        for (k=0; k<K; k++){
+				for (k2=0; k2<K; k2++){
+				  if (k2 != k){
+				    for (k3=0; k3<K; k3++){
+				      if ((k3 != k) && (k3 != k2)){
+					sum_of_sums = all_sum[b][k] + all_sum[negeq[start_h][1] - 1][k2] + all_sum[negeq[start_h+1][1] - 1][k3];
+					if (sum_of_sums < min_sum) min_sum = sum_of_sums;
+				      }
+				    }
+				  }
+				}
+			}
+		}
+
+
+		if (nodes == 4){ // 4-node complete graph
+		  for (k=0; k<K; k++){
+		    for (k2=0; k2<K; k2++){
+		      if (k2 != k){
+			for (k3=0; k3<K; k3++){
+			  if ((k3 != k) && (k3 != k2)){
+			    for (k4=0; k4<K; k4++) {
+			      if ((k4 != k) && (k4 != k2) && (k4 != k3)) {
+				sum_of_sums = all_sum[b][k] + all_sum[negeq[start_h][1] - 1][k2] + all_sum[negeq[start_h+1][1] - 1][k3] + all_sum[negeq[start_h+2][1] - 1][k4];
+				if (sum_of_sums < min_sum) min_sum = sum_of_sums;
+			      }
+			    }
+			  }
+			}
+		      }
+		    }
+		  }
+		}
+
+
+		if (nodes == 5){ // 5-node complete graph
+		  for (k=0; k<K; k++){
+		    for (k2=0; k2<K; k2++){
+		      if (k2 != k){
+			for (k3=0; k3<K; k3++){
+			  if ((k3 != k) && (k3 != k2)){
+			    for (k4=0; k4<K; k4++) {
+			      if ((k4 != k) && (k4 != k2) && (k4 != k3)) {
+				for (k5=0; k5<K; k5++){
+				  if ((k5 != k) && (k5 != k2) && (k5 != k3) && (k5 != k4)){
+				    sum_of_sums = all_sum[b][k] + all_sum[negeq[start_h][1] - 1][k2] + all_sum[negeq[start_h+1][1] - 1][k3] + all_sum[negeq[start_h+2][1] - 1][k4] +  all_sum[negeq[start_h+3][1] - 1][k5];
+				    if (sum_of_sums < min_sum) min_sum = sum_of_sums;
+				  }
+				}
+			      }
+			    }
+			  }
+			}
+		      }
+		    }
+		  }
+		}
+
+
+		if (nodes == 6){ // 6-node complete graph
+		  for (k=0; k<K; k++){
+		    for (k2=0; k2<K; k2++){
+		      if (k2 != k){
+			for (k3=0; k3<K; k3++){
+			  if ((k3 != k) && (k3 != k2)){
+			    for (k4=0; k4<K; k4++) {
+			      if ((k4 != k) && (k4 != k2) && (k4 != k3)) {
+				for (k5=0; k5<K; k5++){
+				  if ((k5 != k) && (k5 != k2) && (k5 != k3) && (k5 != k4)){
+				    for (k6=0; k6<K; k6++){
+				      if ((k6 != k) && (k6 != k2) && (k6 != k3) && (k6 != k4) && (k6 != k5)){
+					sum_of_sums = all_sum[b][k] + all_sum[negeq[start_h][1] - 1][k2] + all_sum[negeq[start_h+1][1] - 1][k3] + all_sum[negeq[start_h+2][1] - 1][k4] +  all_sum[negeq[start_h+3][1] - 1][k5] + all_sum[negeq[start_h+4][1] - 1][k6];
+					if (sum_of_sums < min_sum) min_sum = sum_of_sums;
+				      }
+				    }
+				  }
+				}
+			      }
+			    }
+			  }
+			}
+		      }
+		    }
+		  }
+		}
+
+		if (nodes == 7){ // 7-node complete graph
+		  for (k=0; k<K; k++){
+		    for (k2=0; k2<K; k2++){
+		      if (k2 != k){
+			for (k3=0; k3<K; k3++){
+			  if ((k3 != k) && (k3 != k2)){
+			    for (k4=0; k4<K; k4++) {
+			      if ((k4 != k) && (k4 != k2) && (k4 != k3)) {
+				for (k5=0; k5<K; k5++){
+				  if ((k5 != k) && (k5 != k2) && (k5 != k3) && (k5 != k4)){
+				    for (k6=0; k6<K; k6++){
+				      if ((k6 != k) && (k6 != k2) && (k6 != k3) && (k6 != k4) && (k6 != k5)){
+					for (k7=0; k7<K; k7++){
+					  if ((k7 != k) && (k7 != k2) && (k7 != k3) && (k7 != k4) && (k7 != k5) && (k7 != k6)){
+					    sum_of_sums = all_sum[b][k] + all_sum[negeq[start_h][1] - 1][k2] + all_sum[negeq[start_h+1][1] - 1][k3] + all_sum[negeq[start_h+2][1] - 1][k4] +  all_sum[negeq[start_h+3][1] - 1][k5] + all_sum[negeq[start_h+4][1] - 1][k6] + all_sum[negeq[start_h+5][1] - 1][k7];
+					    if (sum_of_sums < min_sum) min_sum = sum_of_sums;
+					  }
+					}
+				      }
+				    }
+				  }
+				}
+			      }
+			    }
+			  }
+			}
+		      }
+		    }
+		  }
+		}
+
+
+		if (nodes == 8){ // 8-node complete graph
+		  for (k=0; k<K; k++){
+		    for (k2=0; k2<K; k2++){
+		      if (k2 != k){
+			for (k3=0; k3<K; k3++){
+			  if ((k3 != k) && (k3 != k2)){
+			    for (k4=0; k4<K; k4++) {
+			      if ((k4 != k) && (k4 != k2) && (k4 != k3)) {
+				for (k5=0; k5<K; k5++){
+				  if ((k5 != k) && (k5 != k2) && (k5 != k3) && (k5 != k4)){
+				    for (k6=0; k6<K; k6++){
+				      if ((k6 != k) && (k6 != k2) && (k6 != k3) && (k6 != k4) && (k6 != k5)){
+					for (k7=0; k7<K; k7++){
+					  if ((k7 != k) && (k7 != k2) && (k7 != k3) && (k7 != k4) && (k7 != k5) && (k7 != k6)){
+					    for (k8=0; k8<K; k8++){
+					      if ((k8 != k) && (k8 != k2) && (k8 != k3) && (k8 != k4) && (k8 != k5) && (k8 != k6) && (k8 != k7)){
+					    sum_of_sums = all_sum[b][k] + all_sum[negeq[start_h][1] - 1][k2] + all_sum[negeq[start_h+1][1] - 1][k3] + all_sum[negeq[start_h+2][1] - 1][k4] +  all_sum[negeq[start_h+3][1] - 1][k5] + all_sum[negeq[start_h+4][1] - 1][k6] + all_sum[negeq[start_h+5][1] - 1][k7] + all_sum[negeq[start_h+6][1] - 1][k8];
+					    if (sum_of_sums < min_sum) min_sum = sum_of_sums;
+					      }
+					    }
+					  }
+					}
+				      }
+				    }
+				  }
+				}
+			      }
+			    }
+			  }
+			}
+		      }
+		    }
+		  }
+		}
+
+		if (nodes == 9){ // 9-node complete graph
+		  for (k=0; k<K; k++){
+		    for (k2=0; k2<K; k2++){
+		      if (k2 != k){
+			for (k3=0; k3<K; k3++){
+			  if ((k3 != k) && (k3 != k2)){
+			    for (k4=0; k4<K; k4++) {
+			      if ((k4 != k) && (k4 != k2) && (k4 != k3)) {
+				for (k5=0; k5<K; k5++){
+				  if ((k5 != k) && (k5 != k2) && (k5 != k3) && (k5 != k4)){
+				    for (k6=0; k6<K; k6++){
+				      if ((k6 != k) && (k6 != k2) && (k6 != k3) && (k6 != k4) && (k6 != k5)){
+					for (k7=0; k7<K; k7++){
+					  if ((k7 != k) && (k7 != k2) && (k7 != k3) && (k7 != k4) && (k7 != k5) && (k7 != k6)){
+					    for (k8=0; k8<K; k8++){
+					      if ((k8 != k) && (k8 != k2) && (k8 != k3) && (k8 != k4) && (k8 != k5) && (k8 != k6) && (k8 != k7)){
+						for (k9=0; k9<K; k9++){
+						  if ((k9 != k) && (k9 != k2) && (k9 != k3) && (k9 != k4) && (k9 != k5) && (k9 != k6) && (k9 != k7) && (k9 != k8)){
+						    sum_of_sums = all_sum[b][k] + all_sum[negeq[start_h][1] - 1][k2] + all_sum[negeq[start_h+1][1] - 1][k3] + all_sum[negeq[start_h+2][1] - 1][k4] +  all_sum[negeq[start_h+3][1] - 1][k5] + all_sum[negeq[start_h+4][1] - 1][k6] + all_sum[negeq[start_h+5][1] - 1][k7] + all_sum[negeq[start_h+6][1] - 1][k8] + all_sum[negeq[start_h+7][1] - 1][k9];
+						    if (sum_of_sums < min_sum) min_sum = sum_of_sums;
+						  }
+						}
+					      }
+					    }
+					  }
+					}
+				      }
+				    }
+				  }
+				}
+			      }
+			    }
+			  }
+			}
+		      }
+		    }
+		  }
+		}
+
+
+		if (nodes == 10){ // 10-node complete graph
+		  for (k=0; k<K; k++){
+		    for (k2=0; k2<K; k2++){
+		      if (k2 != k){
+			for (k3=0; k3<K; k3++){
+			  if ((k3 != k) && (k3 != k2)){
+			    for (k4=0; k4<K; k4++) {
+			      if ((k4 != k) && (k4 != k2) && (k4 != k3)) {
+				for (k5=0; k5<K; k5++){
+				  if ((k5 != k) && (k5 != k2) && (k5 != k3) && (k5 != k4)){
+				    for (k6=0; k6<K; k6++){
+				      if ((k6 != k) && (k6 != k2) && (k6 != k3) && (k6 != k4) && (k6 != k5)){
+					for (k7=0; k7<K; k7++){
+					  if ((k7 != k) && (k7 != k2) && (k7 != k3) && (k7 != k4) && (k7 != k5) && (k7 != k6)){
+					    for (k8=0; k8<K; k8++){
+					      if ((k8 != k) && (k8 != k2) && (k8 != k3) && (k8 != k4) && (k8 != k5) && (k8 != k6) && (k8 != k7)){
+						for (k9=0; k9<K; k9++){
+						  if ((k9 != k) && (k9 != k2) && (k9 != k3) && (k9 != k4) && (k9 != k5) && (k9 != k6) && (k9 != k7) && (k9 != k8)){
+						    for (k10=0; k10<K; k10++){
+						      if ((k10 != k) && (k10 != k2) && (k10 != k3) && (k10 != k4) && (k10 != k5) && (k10 != k6) && (k10 != k7) && (k10 != k8) && (k10 != k9)){
+							sum_of_sums = all_sum[b][k] + all_sum[negeq[start_h][1] - 1][k2] + all_sum[negeq[start_h+1][1] - 1][k3] + all_sum[negeq[start_h+2][1] - 1][k4] +  all_sum[negeq[start_h+3][1] - 1][k5] + all_sum[negeq[start_h+4][1] - 1][k6] + all_sum[negeq[start_h+5][1] - 1][k7] + all_sum[negeq[start_h+6][1] - 1][k8] + all_sum[negeq[start_h+7][1] - 1][k9] + all_sum[negeq[start_h+8][1] - 1][k10];
+							if (sum_of_sums < min_sum) min_sum = sum_of_sums;
+						      }
+						    }
+						  }
+						}
+					      }
+					    }
+					  }
+					}
+				      }
+				    }
+				  }
+				}
+			      }
+			    }
+			  }
+			}
+		      }
+		    }
+		  }
+		}
+
+		//		printf("block %i min_sum %lf \n", b, min_sum);
+		
+						
+	
+	  //	for (b=0; b<14; b++){
+		//	for (k=0; k<K; k++){
+		//	printf("%lf ", all_sum[b][k]);
+		//}
+		//printf("\n");
+		//}
+		
+		//	  	printf("MIN SUM %lf	\n", min_sum);
+		
+		
+		for (k=0; k<K; k++){
+
+			sum0 = 0;
+
+			//min_sum has to be subtracted to avoid numerical issues
+			if (nodes == 1){ // 1-node complete graph
+				sum0 = exp(-(all_sum[b][k] - min_sum)/ 2.0 / sigma2);
+			}				
+					
+			if (nodes == 2){ // 2-node complete graph
+				for (k2=0; k2<K; k2++){
+					if (k2 != k) sum0 = sum0 + exp(-1.0 / 2 / sigma2 * (all_sum[b][k] +
+										all_sum[negeq[start_h][1] - 1][k2] - min_sum));
+				}
+			}
+
+			if (nodes == 3){ // 3-node complete graph
+				for (k2=0; k2<K; k2++){
+					if (k2 != k){
+						for (k3=0; k3<K; k3++){
+							if ((k3 != k) && (k3 != k2)) sum0 = sum0 + exp(-1.0 / 2 / sigma2 * (all_sum[b][k] +
+										all_sum[negeq[start_h][1] - 1][k2] +
+										all_sum[negeq[start_h+1][1] - 1][k3] - min_sum));
+						}
+					}
+				}
+			}
+
+			// min_sum needs to be computed for the parts below		
+			if (nodes == 4){ // 4-node complete graph
+				for (k2=0; k2<K; k2++){
+					if (k2 != k){
+						for (k3=0; k3<K; k3++){
+							if ((k3 != k) && (k3 != k2)){
+								for (k4=0; k4<K; k4++){
+									if ((k4 != k) && (k4 != k2) && (k4 != k3)) sum0 = sum0 + exp(-1.0 / 2 / sigma2 * (all_sum[b][k] +
+										all_sum[negeq[start_h][1] - 1][k2] +
+										all_sum[negeq[start_h+1][1] - 1][k3] +
+										all_sum[negeq[start_h+2][1] - 1][k4] - min_sum));
+								}
+							}
+						}
+					}
+				}
+			}	
+
+			if (nodes == 5){ // 5-node complete graph
+				for (k2=0; k2<K; k2++){
+					if (k2 != k){
+						for (k3=0; k3<K; k3++){
+							if ((k3 != k) && (k3 != k2)){
+								for (k4=0; k4<K; k4++){
+									if ((k4 != k) && (k4 != k2) && (k4 != k3)){
+										for (k5=0; k5<K; k5++){
+											if ((k5 != k) && (k5 != k2) && (k5 != k3) && (k5 != k4)) sum0 = sum0 +
+												exp(-1.0 / 2 / sigma2 *	(all_sum[b][k] +
+												all_sum[negeq[start_h][1] - 1][k2] +
+												all_sum[negeq[start_h+1][1] - 1][k3] +
+												all_sum[negeq[start_h+2][1] - 1][k4] +
+												all_sum[negeq[start_h+3][1] - 1][k5] - min_sum));
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			
+			if (nodes == 6){ // 6-node complete graph
+				for (k2=0; k2<K; k2++){
+					if (k2 != k){
+						for (k3=0; k3<K; k3++){
+							if ((k3 != k) && (k3 != k2)){
+								for (k4=0; k4<K; k4++){
+									if ((k4 != k) && (k4 != k2) && (k4 != k3)){
+										for (k5=0; k5<K; k5++){
+											if ((k5 != k) && (k5 != k2) && (k5 != k3) && (k5 != k4)){
+												for (k6=0; k6<K; k6++){
+													if ((k6 != k) && (k6 != k2) && (k6 != k3) && (k6 != k4) && (k6 != k5))
+														sum0 = sum0 + exp(-1.0 / 2 / sigma2 * (all_sum[b][k] +
+														all_sum[negeq[start_h][1] - 1][k2] +
+														all_sum[negeq[start_h+1][1] - 1][k3] +
+														all_sum[negeq[start_h+2][1] - 1][k4] +
+														all_sum[negeq[start_h+3][1] - 1][k5] +
+														all_sum[negeq[start_h+4][1] - 1][k6] - min_sum));
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			
+			if (nodes == 7){ // 7-node complete graph
+				for (k2=0; k2<K; k2++){
+					if (k2 != k){
+						for (k3=0; k3<K; k3++){
+							if ((k3 != k) && (k3 != k2)){
+								for (k4=0; k4<K; k4++){
+									if ((k4 != k) && (k4 != k2) && (k4 != k3)){
+										for (k5=0; k5<K; k5++){
+											if ((k5 != k) && (k5 != k2) && (k5 != k3) && (k5 != k4)){
+												for (k6=0; k6<K; k6++){
+													if ((k6 != k) && (k6 != k2) && (k6 != k3) && (k6 != k4) && (k6 != k5)){
+														for (k7=0; k7<K; k7++){
+															if ((k7 != k) && (k7 != k2) && (k7 != k3) && (k7 != k4) &&
+																(k7 != k5) && (k7 != k6))											
+														sum0 = sum0 + exp(-1.0 / 2 / sigma2 * (all_sum[b][k] +
+														all_sum[negeq[start_h][1] - 1][k2] +
+														all_sum[negeq[start_h+1][1] - 1][k3] +
+														all_sum[negeq[start_h+2][1] - 1][k4] +
+														all_sum[negeq[start_h+3][1] - 1][k5] +
+														all_sum[negeq[start_h+4][1] - 1][k6] +
+														all_sum[negeq[start_h+5][1] - 1][k7] - min_sum));
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			
+			if (nodes == 8){ // 8-node complete graph
+				for (k2=0; k2<K; k2++){
+					if (k2 != k){
+						for (k3=0; k3<K; k3++){
+							if ((k3 != k) && (k3 != k2)){
+								for (k4=0; k4<K; k4++){
+									if ((k4 != k) && (k4 != k2) && (k4 != k3)){
+										for (k5=0; k5<K; k5++){
+											if ((k5 != k) && (k5 != k2) && (k5 != k3) && (k5 != k4)){
+												for (k6=0; k6<K; k6++){
+													if ((k6 != k) && (k6 != k2) && (k6 != k3) && (k6 != k4) && (k6 != k5)){
+														for (k7=0; k7<K; k7++){
+															if ((k7 != k) && (k7 != k2) && (k7 != k3) && (k7 != k4) &&
+																(k7 != k5) && (k7 != k6)){
+																for (k8=0; k8<K; k8++){
+																	if ((k8 != k) && (k8 != k2) && (k8 != k3) && (k8 != k4) &&
+																		(k8 != k5) && (k8 != k6) && (k8 != k7)) 
+														sum0 = sum0 + exp(-1.0 / 2 / sigma2 * (all_sum[b][k] +
+														all_sum[negeq[start_h][1] - 1][k2] +
+														all_sum[negeq[start_h+1][1] - 1][k3] +
+														all_sum[negeq[start_h+2][1] - 1][k4] +
+														all_sum[negeq[start_h+3][1] - 1][k5] +
+														all_sum[negeq[start_h+4][1] - 1][k6] +
+														all_sum[negeq[start_h+5][1] - 1][k7] +
+														all_sum[negeq[start_h+6][1] - 1][k8] - min_sum));
+																}
+															}
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			
+			if (nodes == 9){ // 9-node complete graph
+				for (k2=0; k2<K; k2++){
+					if (k2 != k){
+						for (k3=0; k3<K; k3++){
+							if ((k3 != k) && (k3 != k2)){
+								for (k4=0; k4<K; k4++){
+									if ((k4 != k) && (k4 != k2) && (k4 != k3)){
+										for (k5=0; k5<K; k5++){
+											if ((k5 != k) && (k5 != k2) && (k5 != k3) && (k5 != k4)){
+												for (k6=0; k6<K; k6++){
+													if ((k6 != k) && (k6 != k2) && (k6 != k3) && (k6 != k4) && (k6 != k5)){
+														for (k7=0; k7<K; k7++){
+															if ((k7 != k) && (k7 != k2) && (k7 != k3) && (k7 != k4) &&
+																(k7 != k5) && (k7 != k6)){
+																for (k8=0; k8<K; k8++){
+																	if ((k8 != k) && (k8 != k2) && (k8 != k3) && (k8 != k4) &&
+																		(k8 != k5) && (k8 != k6) && (k8 != k7)){
+																		for (k9=0; k9<K; k9++){
+																			if ((k9 != k) && (k9 != k2) && (k9 != k3) && (k9 != k4) &&
+																				(k9 != k5) && (k9 != k6) && (k9 != k7) && (k9 != k8))							
+														sum0 = sum0 + exp(-1.0 / 2 / sigma2 * (all_sum[b][k] +
+														all_sum[negeq[start_h][1] - 1][k2] +
+														all_sum[negeq[start_h+1][1] - 1][k3] +
+														all_sum[negeq[start_h+2][1] - 1][k4] +
+														all_sum[negeq[start_h+3][1] - 1][k5] +
+														all_sum[negeq[start_h+4][1] - 1][k6] +
+														all_sum[negeq[start_h+5][1] - 1][k7] +
+														all_sum[negeq[start_h+6][1] - 1][k8] +														
+														all_sum[negeq[start_h+7][1] - 1][k9] - min_sum));
+																		}
+																	}
+																}
+															}
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}			
+			
+			
+			if (nodes == 10){ // 10-node complete graph
+				for (k2=0; k2<K; k2++){
+					if (k2 != k){
+						for (k3=0; k3<K; k3++){
+							if ((k3 != k) && (k3 != k2)){
+								for (k4=0; k4<K; k4++){
+									if ((k4 != k) && (k4 != k2) && (k4 != k3)){
+										for (k5=0; k5<K; k5++){
+											if ((k5 != k) && (k5 != k2) && (k5 != k3) && (k5 != k4)){
+												for (k6=0; k6<K; k6++){
+													if ((k6 != k) && (k6 != k2) && (k6 != k3) && (k6 != k4) && (k6 != k5)){
+														for (k7=0; k7<K; k7++){
+															if ((k7 != k) && (k7 != k2) && (k7 != k3) && (k7 != k4) &&
+																(k7 != k5) && (k7 != k6)){
+																for (k8=0; k8<K; k8++){
+																	if ((k8 != k) && (k8 != k2) && (k8 != k3) && (k8 != k4) &&
+																		(k8 != k5) && (k8 != k6) && (k8 != k7)){
+																		for (k9=0; k9<K; k9++){
+																			if ((k9 != k) && (k9 != k2) && (k9 != k3) && (k9 != k4) &&
+																				(k9 != k5) && (k9 != k6) && (k9 != k7) && (k9 != k8)){
+																				for (k10=0; k10<K; k10++){																				
+																					if ((k10 != k) && (k10 != k2) && (k10 != k3) &&
+																						(k10 != k4) && (k10 != k5) && (k10 != k6) &&
+																						(k10 != k7) && (k10 != k8) && (k10 != k9))																				
+														sum0 = sum0 + exp(-1.0 / 2 / sigma2 * (all_sum[b][k] +
+														all_sum[negeq[start_h][1] - 1][k2] +
+														all_sum[negeq[start_h+1][1] - 1][k3] +
+														all_sum[negeq[start_h+2][1] - 1][k4] +
+														all_sum[negeq[start_h+3][1] - 1][k5] +
+														all_sum[negeq[start_h+4][1] - 1][k6] +
+														all_sum[negeq[start_h+5][1] - 1][k7] +
+														all_sum[negeq[start_h+6][1] - 1][k8] +	
+														all_sum[negeq[start_h+7][1] - 1][k9] +																												
+														all_sum[negeq[start_h+8][1] - 1][k10] - min_sum));
+																				}
+																			}
+																		}
+																	}
+																}
+															}
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}				
+			
+			
+			if (sum0 > best_sum){
+				best_sum = sum0;
+				Z[b] = k;
+			}		
+			//			printf("best_sum %lf \n", best_sum);
+		
+
+					
+		}
+		
+		if (nodes > 1) start_h = start_h + nodes - 1;				
+		
+	
+	}
+	
+	FREE_MATRIX(all_sum);
+			
+}
+
+
+int recompute_means(double **mu, double **x, int *Z, int *poseq, int K, int n, int p, int B) {
+
+	int i, k, j = 0;
+	int flag;
+	int *nk;
+
+	MAKE_VECTOR(nk, K);
+
+	flag = 0;
+
+	for (k=0; k<K; k++){
+		nk[k] = 0;
+		for (j=0; j<p; j++){
+			mu[k][j] = 0.0;
+		}
+	}
+
+	for (i=0; i<n; i++){
+		for (j=0; j<p; j++){
+			mu[Z[poseq[i]-1]][j] = mu[Z[poseq[i]-1]][j] + x[i][j];
+		}
+		nk[Z[poseq[i]-1]]++;
+	}
+	
+	for (k=0; k<K; k++){
+		if (nk[k] != 0){
+			for (j=0; j<p; j++){
+				mu[k][j] = mu[k][j] / nk[k];
+			}
+		} else {
+			flag = 1;
+			break;
+		}
+	}
+
+	FREE_VECTOR(nk);
+
+	return flag;
+
+
+
+
+
+
+//	for (k=0; k<K; k++) {
+//		for (j=0; j<p; j++) {
+//			sum[j] = 0;
+//		}
+//		counter = 0;
+//
+//		for (b=0; b<B; b++) {
+//			if (Z[b]==k) {
+// 
+//				for (i=0; i<n; i++){
+//					if (poseq[i]==(b+1)) {
+//						counter++;
+//						for (j=0; j<p; j++) {
+//							sum[j] = sum[j] + x[i][j];
+//						}
+//					} // end if (poseq[i]=block)
+//				}
+//			} // end of if (Z[block]==k)
+//		} // end of for (block)
+//
+//		if (counter == 0) {
+//			flag = 1;
+//			printf("%ith cluster is not around anymore \n", k);
+//		} else {
+//			for (j=0; j<p; j++) {
+//				mu[k][j] = sum[j]/counter;
+//			}
+//		}
+//   
+//	} // end of for (k)
+//	if (flag==1) { 
+//		return 1;
+//	} else {
+//		return 0;
+//	}
+
+}
+
+
+	
+int ssKmeans(double **x, int p, int n, int K, int *poseq, int  B, int **negeq, int negdim, int runs, int max_iter, double **mu, int *id, double *misc_double){
+
+	double sigma2, best_sigma2;
+	double wss, old_wss, best_wss;
+	double sqdist, min_sqdist, eps;
+
+	int i, j, k, l;
+	int *Z;
+	int flag, iter;
+
+	eps = misc_double[0];
+
+	best_wss = INFINITY;
+	best_sigma2 = INFINITY;
+
+  	MAKE_VECTOR(Z, B);
+			
+	for (l=0; l<runs; l++) { // number of Kmeans restarts
+			
+		old_wss = INFINITY;
+		iter = 1; // variable for keeping track of # of Kmeans restarts
+		
+		// Obtain initial cluster centers
+		initialization_mu(x, n, p, K, B, poseq, mu);
+
+
+		// Estimate sigma based on distances to current cluster centers
+		
+		wss = 0.0;
+		for (i=0; i<n; i++) {
+			min_sqdist = INFINITY;
+			for (k=0; k<K; k++) {
+				sqdist = 0.0;
+				for (j=0; j<p; j++) { 
+					sqdist = sqdist + pow(x[i][j] - mu[k][j], 2);
+				}
+				if (sqdist < min_sqdist){
+					min_sqdist = sqdist;
+				}
+			}
+			wss = wss + min_sqdist;
+		}
+
+		sigma2 = wss / n / p;
+
+		flag = 0;
+
+		while ((flag == 0) && (iter < max_iter) && (fabs((wss - old_wss) / wss) > eps)) {
+
+			membership(x, K, n, p, B, negdim, poseq, negeq, mu, sigma2, Z);
+
+
+			flag = recompute_means(mu, x, Z, poseq, K, n, p, B); // flag = 1 => cluster is completely dissolved
+
+			old_wss = wss;
+    
+			wss = 0;
+			for (i=0; i<n; i++) {
+				sqdist = 0.0;
+				for (j=0; j<p; j++) {
+					sqdist = sqdist + pow(x[i][j] - mu[Z[poseq[i]-1]][j], 2);
+				}
+				wss = wss + sqdist;
+			}
+
+			sigma2 = wss / n / p;
+			    
+			iter++;
+
+		} // end of while
+
+
+		if (wss < best_wss) { 
+			best_wss = wss;
+			best_sigma2 = sigma2;
+			for (i=0; i<n; i++) {
+				id[i] = Z[poseq[i]-1];
+			}
+		}
+		
+	} // end of loop over l
+
+
+	misc_double[1] = best_sigma2;
+	misc_double[2] = best_wss;
+	
+	FREE_VECTOR(Z);
+	
+	return 0;
+ 
+}
