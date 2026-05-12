@@ -1,22 +1,17 @@
 Package: ssKmeans
-Version: 0.0.1
-Date: 2026-05-19
-Title: Semi-Supervised K-Means Algorithm
-Authors@R: c(person("Volodymyr", "Melnykov", role = c("aut", "cre"), email = "vmelnykov@cba.ua.edu"), 
-        person("Igor", "Melnykov", role = c("aut"), email = "imelnyko@d.umn.edu"), 
-        person("Johnson", "Emma", role = c("cre"), email = "joh19128@d.umn.edu"))
+Type: Package
+Version: 0.1.1
+Date: 2026-05-12
+Title: Semi-Supervised K-Means Algorithm with Positive and Negative Constraints
+Authors@R: c(
+    person("Emma", "Johnson", role = c("aut", "cre"), email = "emma35johnson@gmail.com"),
+    person("Volodymyr", "Melnykov", role = "aut"),
+    person("Igor", "Melnykov", role = "aut")
+    )
+Description: Implements a semi-supervised version of the K-Means algorithm with hard positive and negative constraints. Positive constraints require specified observations to end up in the same cluster, while negative constraints require specified observations or blocks of observations to end up in different clusters. The package returns final membership labels, cluster centers, cluster sizes, a variance estimate, and within- and between-cluster sums of squares.
+License: GPL (>= 2)
 Encoding: UTF-8
 Depends: R (>= 3.0.0)
-LazyLoad: yes
-LazyData: no
-Description: Semi-supervised Kmeans algorithm based on positive and negative constraints is the main utility of the package. Positive constraints specify which observations must belong to the same cluster. Negative constraints provide information with regard to which observations must belong to different clusters. 
-License: GPL (>= 2)
-Packaged: 2015-08-29 00:15:06 UTC; vmelnykov
-Author: Volodymyr Melnykov [aut, cre],
-	Igor Melnykov [aut],
-	Emma Johnson [cre]
-Maintainer: Volodymyr Melnykov <vmelnykov@cba.ua.edu>
+LazyData: false
 NeedsCompilation: yes
-Repository: CRAN
-Date/Publication: 2015-08-25 19:46:21
 RoxygenNote: 7.3.3

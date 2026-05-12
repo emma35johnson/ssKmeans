@@ -1,65 +1,148 @@
 \name{ssKmeans}
 \alias{ssKmeans}
-%- Also NEED an '\alias' for EACH other topic documented here.
-\title{ Semi-supervised Kmeans algorithm with membership constraints }
+
+\title{Semi-Supervised K-Means Algorithm with Membership Constraints}
+
 \description{
-Runs the Kmeans algorithm with positive and negative constraints provided. Positive constraints indicate the points that have to belong to the  same cluster. Negative constraints are used to restrict observations to belong to different clusters.
+Runs a semi-supervised version of the K-Means algorithm with optional positive and negative membership constraints. Positive constraints require specified observations to share the same class label, while negative constraints require specified blocks of observations to receive different class labels.
 }
+
 \usage{
 ssKmeans(X, K, tol = 1e-10, pos.eq = NULL, neg.eq = NULL, r = 3, max.iter = 100)
 }
-%- maybe also 'usage' for other objects documented here.
+
 \arguments{
-  \item{X }{ dataset matrix (n x p) }
-  \item{K }{ number of clusters }
-  \item{tol }{ tolerance level }
-  \item{pos.eq }{ set of positive constraints (vector of length n)}
-  \item{neg.eq }{ set of negative constraints (m x 2 matrix of pairwise constraints)}
-  \item{r }{ number of restarts}
-  \item{max.iter }{ maximum number of iterations allowed}
+  \item{X}{A numeric data matrix with \eqn{n} observations and \eqn{p} variables.}
+  \item{K}{The number of clusters.}
+  \item{tol}{The convergence tolerance level.}
+  \item{pos.eq}{An optional list of positive constraints. Each element of the list contains the row indices of observations that must be assigned the same class label. If \code{NULL}, each observation is treated as its own singleton block.}
+  \item{neg.eq}{An optional symmetric adjacency matrix encoding negative constraints between blocks. A value of 1 indicates that the corresponding pair of blocks must be assigned different class labels, and 0 indicates no negative constraint. If \code{NULL}, no negative constraints are imposed.}
+  \item{r}{The number of random restarts.}
+  \item{max.iter}{The maximum number of iterations allowed for each restart.}
 }
+
 \details{
-Runs the Kmeans algorithm with positive and negative equivalence constraints. The function returns estimated cluster centers, partitioning, variance estimate, and within- and between-cluster sums of squares. In the vector 'pos.eq', observations that have to be in the same cluster, must belong to the same block. If positive equivalences are not provided, each observations is treated as a separate block of size 1. In this case, 'pos.eq' is a sequence of integers from 1 to n. Negative constraints must be organized in the form of a m x 2 matrix, where m is the number of pairwise restrictions for all blocks.
-To provide better performance of the algorithm, several restarts are recommended. The default number of restarts is 3.
+The function implements a semi-supervised extension of the K-Means algorithm that accommodates hard positive and negative constraints.
+
+Positive constraints are handled by forming blocks of observations that must share a common class label. If no positive constraints are supplied, each observation is treated as a singleton block.
+
+Negative constraints are imposed between blocks through the matrix \code{neg.eq}. These constraints require certain blocks to receive different class labels. The algorithm searches over feasible class assignments that satisfy the specified constraints while minimizing the within-cluster sum of squares objective.
+
+Several random restarts are recommended because K-Means-type algorithms are sensitive to initialization. The default number of restarts is \code{r = 3}.
 }
+
 \value{
-  \item{id }{ classification vector (length n)}
-  \item{centers }{ matrix of cluster centers (K x p)}
-  \item{var }{ variance}
-  \item{ssw }{ within-cluster sum of squares}
-  \item{ssb }{ between-cluster sum of squares}
+A list containing:
+  \item{id}{The final membership/class label vector of length \eqn{n}.}
+  \item{size}{The final cluster sizes.}
+  \item{centers}{A matrix of final cluster centers with dimension \eqn{K \times p}.}
+  \item{var}{The estimated common variance parameter.}
+  \item{tss}{The total sum of squares.}
+  \item{wcss}{The within-cluster sum of squares.}
+  \item{bcss}{The between-cluster sum of squares.}
 }
+
 \references{
-Melnykov, V., Melnykov, I. and Michael, S. (2015) Semi-supervised model-based clustering with positive and negative constraints, accepted by Advances in Data Analysis and Classification}
-\author{ Melnykov, V. and Melnykov, I.}
+Melnykov, I. and Melnykov, V. (2020). A note on the formal implementation of the K-means algorithm with hard positive and negative constraints. \emph{Journal of Classification}, 37, 789--809.
 
-\seealso{kmeans}
-\examples{
-
-set.seed(123)
-
-X <- as.matrix(iris[,-5])
-
-# Traditional Kmeans without any constraints
-
-Q1 <- ssKmeans(X, K = 3); Q1$id
-
-
-# K-means with the last 50 points required to belong to the same cluster
-
-peq <- c(1:100, rep(101, 50))
-Q2 <- ssKmeans(X, K = 3, pos.eq = peq); Q2$id
-
-
-# K-means with the points 131 to 140 in one cluster and points 141:150 in another cluster
-
-peq <- c(1:130, rep(131, 10), rep(132, 10))
-neq <- rbind(c(131, 132), c(132, 131))
-Q3 <- ssKmeans(X, 3, pos.eq = peq, neg.eq = neq); Q3$id
-
+Melnykov, V., Melnykov, I. and Michael, S. (2016). Semi-supervised model-based clustering with positive and negative constraints. \emph{Advances in Data Analysis and Classification}, 10, 327--349.
 }
-% Add one or more standard keywords, see file 'KEYWORDS' in the
-% R documentation directory.
-\keyword{ Kmeans }
-\keyword{ Semi-supervised clustering }
-\keyword{ Positive and negative constraints }% __ONLY ONE__ keyword per line
+
+\author{
+Emma Johnson
+}
+
+\seealso{
+\code{\link{Kmeans}}
+}
+
+\examples{
+  set.seed(5)
+  
+  X <- as.matrix(iris[, 1:4])
+  species <- as.numeric(iris$Species)
+  K <- 3
+  
+  # ssKmeans with no constraints
+  # (equiv. to standard kmeans)
+  
+  ss.none <- ssKmeans(
+    X = X,
+    K = K,
+    r = 50
+  )
+  
+  ss.none
+  
+  
+  # ssKmeans with positive-only constraints
+  # (blocks of observations)
+  
+  pos <- list(
+    c(16, 42), 
+    c(51, 61, 71), 
+    c(106, 107, 132)
+  )
+  
+  pos
+  
+  ss.pos <- ssKmeans(
+    X = X,
+    K = K,
+    pos.eq = pos,
+    r = 50
+  )
+  
+  ss.pos
+  
+  
+  # ssKmeans with negative-only constraints 
+  # (observation-level)
+  
+  neg.edge <- rbind(
+    c(42, 58),
+    c(51, 110),
+    c(99, 107),
+    c(99, 110)
+  )
+  
+  neg.edge
+  
+  ss.neg <- ssKmeans(
+    X = X,
+    K = K,
+    neg.eq = neg.edge,
+    neg.type = "edge",
+    r = 50
+  )
+  
+  ss.neg
+  
+  
+  # ssKmeans with both positive and negative constraints
+  # (block-level)
+  
+  neg.mat <- matrix(
+    rep(1, 9),
+    nrow = 3
+  ) 
+  diag(neg.mat) <- rep(0, 3)
+  
+  neg.mat
+  
+  ss.both <- ssKmeans(
+    X = X,
+    K = K,
+    pos.eq = pos,
+    neg.eq = neg.mat,
+    neg.type = "matrix",
+    r = 50
+  )
+  
+  ss.both
+}
+
+
+\keyword{cluster}
+\keyword{classification}
+\keyword{multivariate}

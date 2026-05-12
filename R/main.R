@@ -45,10 +45,10 @@ ssKmeans <- function(X, K, tol = 1e-10, pos.eq = NULL, neg.eq = NULL,
       }
       diag(neg_mat) <- 0
       edges <- which(neg_mat != 0 & upper.tri(neg_mat), arr.ind = TRUE)
-    } else if (neg.type == "list") {
+    } else if (neg.type == "edge") {
       edges <- as.matrix(neg.eq)
       if (ncol(edges) != 2){
-        stop("When `neg.type = 'list'`, `neg.eq` must have two columns.")
+        stop("When `neg.type = 'edge'`, `neg.eq` must have two columns.")
       }
       edges <- matrix(as.integer(edges), ncol = 2)
     }

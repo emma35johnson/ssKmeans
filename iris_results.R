@@ -1,5 +1,6 @@
 
-# Iris illustration for ssKmeans
+# Iris illustration for ssKmeans 
+# (shown in thesis)
 
 library(ssKmeans)
 library(mclust)
