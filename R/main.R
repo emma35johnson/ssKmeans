@@ -1,10 +1,3 @@
-# X = x (data)
-# K = centers
-# max.iter = iter.max
-# r = nstart
-
-# pos.eq is list input
-# neg.eq is adjacency matrix (must be symmetric) or edge list (2 columns)
 
 ssKmeans <- function(X, K, tol = 1e-10, pos.eq = NULL, neg.eq = NULL,
                      neg.type = c("matrix", "edge"),
@@ -48,7 +41,7 @@ ssKmeans <- function(X, K, tol = 1e-10, pos.eq = NULL, neg.eq = NULL,
     if (neg.type == "matrix") {
       neg_mat <- as.matrix(neg.eq)
       if (nrow(neg_mat) != ncol(neg_mat)){
-        stop("`neg.eq` must be a square adjacency matrix.")
+        stop("When `neg.type = 'matrix'`, `neg.eq` must be a square adjacency matrix.")
       }
       diag(neg_mat) <- 0
       edges <- which(neg_mat != 0 & upper.tri(neg_mat), arr.ind = TRUE)
@@ -72,7 +65,6 @@ ssKmeans <- function(X, K, tol = 1e-10, pos.eq = NULL, neg.eq = NULL,
   misc_int <- c(p, n, K, B, negdim, r, max.iter)
   misc_double <- c(tol, 0.0, 0.0)
   
-  # returns x1, poseq, negeq1, mu1, id, misc_int, misc_double
   Q <- .C("run_ssKmeans", x1 = as.double(x1), poseq = as.integer(poseq1), negeq1 = as.integer(negeq1), mu1 = as.double(mu1), id = as.integer(id), misc_int = as.integer(misc_int), misc_double = as.double(misc_double), PACKAGE = "ssKmeans")
   
   ssb <- ifelse(K == 1, 0, sum(diag(var(X) * (n-1))) - Q$misc_double[3])
