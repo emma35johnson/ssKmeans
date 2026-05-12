@@ -78,6 +78,7 @@ ssKmeans <- function(X, K, tol = 1e-10, pos.eq = NULL, neg.eq = NULL,
   ssb <- ifelse(K == 1, 0, sum(diag(var(X) * (n-1))) - Q$misc_double[3])
   
   ret <- list(id = Q$id + 1, 
+              size = tabulate(Q$id + 1, nbins = K),
               centers = matrix(Q$mu1, nrow = K, byrow = TRUE), 
               var = Q$misc_double[2], 
               tss = Q$misc_double[3] + ssb,
