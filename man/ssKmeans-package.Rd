@@ -1,6 +1,5 @@
 \name{ssKmeans-package}
 \alias{ssKmeans-package}
-\alias{ssKmeans}
 \docType{package}
 
 \title{

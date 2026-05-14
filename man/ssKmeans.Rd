@@ -8,8 +8,8 @@ Runs a semi-supervised version of the K-Means algorithm with optional positive a
 }
 
 \usage{
-ssKmeans(X, K, tol = 1e-10, pos.eq = NULL, neg.eq = NULL, r = 3, max.iter = 100)
-}
+ssKmeans(X, K, tol = 1e-10, pos.eq = NULL, neg.eq = NULL,
+         neg.type = c("matrix", "edge"), r = 3, max.iter = 100)}
 
 \arguments{
   \item{X}{A numeric data matrix with \eqn{n} observations and \eqn{p} variables.}
@@ -17,6 +17,7 @@ ssKmeans(X, K, tol = 1e-10, pos.eq = NULL, neg.eq = NULL, r = 3, max.iter = 100)
   \item{tol}{The convergence tolerance level.}
   \item{pos.eq}{An optional list of positive constraints. Each element of the list contains the row indices of observations that must be assigned the same class label. If \code{NULL}, each observation is treated as its own singleton block.}
   \item{neg.eq}{An optional symmetric adjacency matrix encoding negative constraints between blocks. A value of 1 indicates that the corresponding pair of blocks must be assigned different class labels, and 0 indicates no negative constraint. If \code{NULL}, no negative constraints are imposed.}
+  \item{neg.type}{The format of \code{neg.eq}. Use \code{"matrix"} when \code{neg.eq} is a block-level adjacency matrix, and \code{"edge"} when \code{neg.eq} is a two-column matrix of observation-level negative constraint pairs.}
   \item{r}{The number of random restarts.}
   \item{max.iter}{The maximum number of iterations allowed for each restart.}
 }
@@ -53,7 +54,7 @@ Emma Johnson
 }
 
 \seealso{
-\code{\link{Kmeans}}
+\code{\link[stats]{kmeans}}
 }
 
 \examples{
