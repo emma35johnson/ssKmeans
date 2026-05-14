@@ -1,9 +1,9 @@
 
-# Iris illustration for ssKmeans 
+# Iris illustration of ssKmeans 
 # (shown in thesis)
 
 library(ssKmeans)
-library(mclust)
+library(mclust) # for adjustedRandIndex(.)
 
 # Data setup
 
