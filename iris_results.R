@@ -21,7 +21,7 @@ km <- kmeans(X, centers = K, nstart = 50)
 adjustedRandIndex(km$cluster, actual) # ARI
 km$tot.withinss # WCSS
 km$betweenss # BCSS
-km$tot.withinss / (nrow(X) * ncol(X)) # variance
+km$tot.withinss / (ncol(X)*(nrow(X) - K)) # variance
 
 ################################################################################
 
