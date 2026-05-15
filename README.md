@@ -24,7 +24,7 @@ library(ssKmeans)
 
 ```r
 ssKmeans(X, K, tol = 1e-10, pos.eq = NULL, neg.eq = NULL,
-         neg.type = "list", r = 3, max.iter = 100)
+         neg.type = c("matrix", "edge"), r = 3, max.iter = 100)
 ```
 
 ## Basic Example
@@ -73,7 +73,7 @@ ss.pos
 
 ## Negative Constraints
 
-Negative constraints can be supplied as an edge list. Each row gives a pair of observations that must receive different class labels.
+Negative constraints can be supplied as an adjacency matrix or as an edge list. Below is the edge list representation, where each row gives a pair of observations that must receive different class labels.
 
 ```r
 neg.edge <- rbind(
@@ -118,7 +118,7 @@ ss.both <- ssKmeans(
   K = K,
   pos.eq = pos,
   neg.eq = neg.block,
-  neg.type = "list",
+  neg.type = "edge",
   r = 50
 )
 
